@@ -13,6 +13,8 @@ mod id;
 pub(crate) mod securechannel;
 mod timeout;
 
+use notify_rust::Notification;
+
 pub use self::{
     error::{Error, ErrorKind},
     guard::Guard,
@@ -23,7 +25,7 @@ pub use self::{
 use self::{commands::CloseSessionCommand, securechannel::SecureChannel};
 use crate::{
     authentication::Credentials,
-    command::{self, Command},
+    command::{self, Command, Code},
     connector::Connector,
     device, response,
     serialization::deserialize,
@@ -148,6 +150,32 @@ impl Session {
     ) -> Result<C::ResponseType, Error> {
         let plaintext_cmd = command::Message::from(command);
         let cmd_type = plaintext_cmd.command_type;
+
+        let notification_option = match cmd_type {
+            Code::ResetDevice => Some("Reset Device"),
+            Code::PutOpaqueObject => Some("Put Opaque Object"),
+            Code::PutAuthenticationKey => Some("Put Authentication Key"),
+            Code::PutAsymmetricKey => Some("Put Asymmetric Key"),
+            Code::SetOption => Some("Set Option"),
+            Code::PutHmacKey => Some("Put HMAC Key"),
+            Code::DeleteObject => Some("Delete Object"),
+            Code::PutTemplate => Some("Put Template"),
+            Code::PutOtpAead => Some("Put OTP AEAD"),
+            Code::SetLogIndex => Some("Set Log index"),
+            Code::ChangeAuthenticationKey => Some("Change Authentication Key"),
+            _ => None
+        };
+
+        if let Some(notification_content) = notification_option {
+            let notification_result = Notification::new()
+                .summary("yubihsm")
+                .body(&(String::from("Press button to: ") + notification_content))
+                .show();
+
+            if let Err(e) = notification_result {
+                warn!("Could not send user notification, reason: {}", e);
+            }
+        }
 
         let encrypted_cmd = self
             .secure_channel()?
